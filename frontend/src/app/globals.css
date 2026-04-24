@@ -1,26 +1,570 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core palette — deep navy / electric blue / emerald */
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #111827;
+  --bg-card: #1a1f35;
+  --bg-card-hover: #222847;
+  --bg-glass: rgba(26, 31, 53, 0.7);
+
+  --accent-blue: #3b82f6;
+  --accent-blue-glow: rgba(59, 130, 246, 0.3);
+  --accent-emerald: #10b981;
+  --accent-emerald-glow: rgba(16, 185, 129, 0.3);
+  --accent-purple: #8b5cf6;
+  --accent-purple-glow: rgba(139, 92, 246, 0.3);
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border-subtle: rgba(148, 163, 184, 0.1);
+  --border-hover: rgba(59, 130, 246, 0.3);
+
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --shadow-glow: 0 0 30px rgba(59, 130, 246, 0.15);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+
+  --font-sans: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", monospace;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Global Reset ── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-card-hover) transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* ── Animated gradient background ── */
+
+.bg-gradient-animated {
+  background: linear-gradient(135deg, #0a0e1a 0%, #111827 40%, #0f172a 70%, #0a0e1a 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ── Glass card ── */
+
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-2px);
+}
+
+.glass-card-static {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+/* ── Buttons ── */
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  color: white;
+  padding: 12px 28px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.btn-primary:hover::before {
+  opacity: 1;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.35);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary:disabled:hover {
+  box-shadow: none;
+}
+
+.btn-primary span {
+  position: relative;
+  z-index: 1;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  padding: 12px 28px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.btn-emerald {
+  background: linear-gradient(135deg, var(--accent-emerald), #059669);
+  color: white;
+  padding: 10px 24px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-emerald:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--accent-emerald-glow);
+}
+
+.btn-emerald:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-purple {
+  background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+  color: white;
+  padding: 10px 24px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-purple:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--accent-purple-glow);
+}
+
+.btn-purple:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Input fields ── */
+
+.input-field {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  width: 100%;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.input-field::placeholder {
+  color: var(--text-muted);
+}
+
+.input-field:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-glow);
+}
+
+.input-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Role selector ── */
+
+.role-card {
+  padding: 28px 22px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.role-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  border-radius: inherit;
+}
+
+/* Hover — blue glow for user card */
+.role-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: rgba(148, 163, 184, 0.3);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+/* Dim unselected when sibling is active */
+.role-card.dimmed {
+  opacity: 0.5;
+  transform: scale(0.97);
+}
+
+.role-card.dimmed:hover {
+  opacity: 0.85;
+  transform: translateY(-2px) scale(1.0);
+}
+
+/* ── Selected: User (blue) ── */
+.role-card.active-user {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow:
+    0 0 20px rgba(59, 130, 246, 0.2),
+    0 0 40px rgba(59, 130, 246, 0.08),
+    inset 0 1px 0 rgba(59, 130, 246, 0.15);
+  transform: translateY(-4px) scale(1.02);
+  animation: roleGlowBlue 2s ease-in-out infinite;
+}
+
+/* ── Selected: Creator (purple) ── */
+.role-card.active-creator {
+  border-color: var(--accent-purple);
+  background: rgba(139, 92, 246, 0.1);
+  box-shadow:
+    0 0 20px rgba(139, 92, 246, 0.2),
+    0 0 40px rgba(139, 92, 246, 0.08),
+    inset 0 1px 0 rgba(139, 92, 246, 0.15);
+  transform: translateY(-4px) scale(1.02);
+  animation: roleGlowPurple 2s ease-in-out infinite;
+}
+
+@keyframes roleGlowBlue {
+  0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.2), 0 0 40px rgba(59, 130, 246, 0.08); }
+  50% { box-shadow: 0 0 28px rgba(59, 130, 246, 0.3), 0 0 50px rgba(59, 130, 246, 0.12); }
+}
+
+@keyframes roleGlowPurple {
+  0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.2), 0 0 40px rgba(139, 92, 246, 0.08); }
+  50% { box-shadow: 0 0 28px rgba(139, 92, 246, 0.3), 0 0 50px rgba(139, 92, 246, 0.12); }
+}
+
+/* ── Checkmark ── */
+.role-card .role-check {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.role-card.active-user .role-check {
+  background: var(--accent-blue);
+  color: white;
+  opacity: 1;
+  transform: scale(1);
+}
+
+.role-card.active-creator .role-check {
+  background: var(--accent-purple);
+  color: white;
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ── Tier badges ── */
+
+.badge {
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-basic {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.badge-standard {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.badge-premium {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+}
+
+/* ── Status badges ── */
+
+.status-pending {
+  color: var(--accent-amber);
+}
+
+.status-in-progress, .status-executing, .status-agent-selection {
+  color: var(--accent-blue);
+}
+
+.status-completed {
+  color: var(--accent-emerald);
+}
+
+.status-failed {
+  color: var(--accent-red);
+}
+
+.status-badge-live {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+}
+
+.status-badge-pending {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+}
+
+/* ── Star rating ── */
+
+.star {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.star:hover {
+  transform: scale(1.2);
+}
+
+.star-filled {
+  color: var(--accent-amber);
+}
+
+.star-empty {
+  color: var(--text-muted);
+}
+
+/* ── Notification toast ── */
+
+.toast {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  z-index: 100;
+  padding: 14px 24px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: slideInRight 0.3s ease;
+  max-width: 400px;
+}
+
+.toast-success {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--accent-emerald);
+}
+
+.toast-error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--accent-red);
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Error alert ── */
+
+.error-alert {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--accent-red);
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+
+/* ── Label ── */
+
+.form-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Section label ── */
+
+.section-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Pulse animation for loading ── */
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ── Fade in ── */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+
+/* ── Spinner ── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ── Progress bar ── */
+
+.progress-bar {
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-emerald));
+  border-radius: var(--radius-full);
+  transition: width 0.5s ease;
+}
+
+/* ── Divider ── */
+
+.divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 24px 0;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .role-card {
+    padding: 18px 14px;
+  }
 }
