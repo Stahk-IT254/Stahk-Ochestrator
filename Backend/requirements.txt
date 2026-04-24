@@ -5,3 +5,7 @@ djangorestframework-simplejwt
 psycopg2-binary
 pillow
 python-dotenv
+requests
+chromadb
+PyPDF2
+python-docx
