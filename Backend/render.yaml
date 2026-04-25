@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: stahk-orchestrator-backend
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn ochestrator.wsgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://stahk-orchestrator.vercel.app"
