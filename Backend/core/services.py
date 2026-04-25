@@ -224,13 +224,22 @@ class AgentExecutionService:
                 "domain": task.domain,
                 "description": task.description,
                 "rag_context": rag_results,
+                "retrieval_depth": agent.retrieval_depth,
                 "requested_format": agent.supported_output_formats[0] if agent.supported_output_formats else "json"
             }
 
             output = None
 
-            # Fallback for dummy/demo endpoints
-            if not agent.api_endpoint or "example.com" in agent.api_endpoint or "localhost" in agent.api_endpoint:
+            # Fallback for dummy/demo/internal endpoints to prevent self-request deadlock
+            is_local = (
+                not agent.api_endpoint
+                or "example.com" in agent.api_endpoint
+                or "127.0.0.1" in agent.api_endpoint
+                or "localhost" in agent.api_endpoint
+                or "internal-agents" in agent.api_endpoint
+            )
+
+            if is_local:
                 output = AgentExecutionService._apply_rules(agent, task, rag_results)
             else:
                 import requests
@@ -415,64 +424,93 @@ class AgentExecutionService:
         return results[:n_results]
 
     @staticmethod
-    def _apply_rules(agent, task, rag_results: list[str]) -> dict:
+    def _apply_rules(agent, task, rag_results: list) -> dict:
         """
         Apply tier-based behavior differentiation.
-        Basic  → summary output
-        Standard → structured output
-        Premium → detailed output with risk analysis
+        Uses task domain + description to generate contextually relevant output.
         """
+        domain = (task.domain or 'general').lower()
+        task_desc = task.description or task.task_type
+        task_type = task.task_type
+
+        # Domain-specific context prefixes ensure output is relevant to the actual task
+        domain_context = {
+            'construction': f"construction project: {task_desc}",
+            'finance': f"financial analysis: {task_desc}",
+            'scheduling': f"scheduling plan: {task_desc}",
+            'risk_analysis': f"risk assessment: {task_desc}",
+            'fitness': f"fitness program: {task_desc}",
+            'healthcare': f"health plan: {task_desc}",
+            'software': f"software task: {task_desc}",
+        }.get(domain, f"{task_type}: {task_desc}")
+
         base_output = {
-            'task_type': task.task_type,
-            'domain': task.domain,
+            'task_type': task_type,
+            'domain': domain,
             'agent_name': agent.name,
+            'context': domain_context,
             'retrieval_depth': agent.retrieval_depth,
             'knowledge_sources': len(rag_results),
         }
 
+        # Filter RAG results to only include domain-relevant facts
+        relevant_facts = [
+            f for f in rag_results
+            if any(kw in f.lower() for kw in domain.split('_') + task_type.lower().split())
+        ] or rag_results  # fallback to all results if none match
+
         if agent.retrieval_depth <= 2:
             base_output['format'] = 'summary'
             base_output['output'] = (
-                f"Summary for {task.task_type}: Based on {len(rag_results)} sources. "
-                + " ".join(rag_results)
+                f"**Summary for {domain_context}:**\n\n"
+                f"Based on {len(relevant_facts)} domain sources, here is what you need to know:\n\n"
+                + " ".join(relevant_facts)
             )
 
         elif 2 < agent.retrieval_depth <= 5:
             base_output['format'] = 'structured'
-            base_output['output'] = {
-                'overview': f"Structured analysis for {task.task_type}",
-                'details': rag_results,
-                'recommendations': [
-                    f"Action {i+1}: {doc.split('.')[0]}."
-                    for i, doc in enumerate(rag_results)
-                ],
-            }
+            
+            recs_text = "\n".join([f"- **Step {i+1}:** {doc.split('.')[0]}." for i, doc in enumerate(relevant_facts)])
+            findings_text = "\n".join([f"- {fact}" for fact in relevant_facts])
+            
+            base_output['output'] = (
+                f"### Structured Analysis: {domain_context}\n\n"
+                f"**Key Findings:**\n{findings_text}\n\n"
+                f"**Recommended Action Plan:**\n{recs_text}"
+            )
 
-        else: # retrieval_depth > 5
+        else:  # retrieval_depth > 5 — Premium tier
+            # Build domain-specific risk factors
+            domain_risks = {
+                'construction': ['Budget overrun', 'Timeline delays', 'Material price fluctuation', 'Subcontractor reliability'],
+                'finance': ['Market volatility', 'Liquidity risk', 'Regulatory changes', 'Currency fluctuation'],
+                'scheduling': ['Resource conflicts', 'Scope creep', 'Dependency delays', 'Stakeholder availability'],
+                'risk_analysis': ['Unidentified tail risks', 'Model assumptions', 'Data gaps', 'Cascading failures'],
+            }.get(domain, ['Scope uncertainty', 'Resource constraints', 'External dependencies', 'Quality gaps'])
+
+            domain_mitigations = {
+                'construction': ['Include 15% contingency budget', 'Build 2–3 week buffer', 'Lock in supplier prices', 'Vet subcontractors with references'],
+                'finance': ['Diversify portfolio', 'Maintain 6-month emergency fund', 'Review regulatory exposure quarterly', 'Hedge FX exposure'],
+                'scheduling': ['Use resource levelling', 'Define change control process', 'Map critical path dependencies', 'Block calendar time early'],
+                'risk_analysis': ['Scenario stress testing', 'Peer-review assumptions', 'Collect additional data points', 'Build circuit-breaker triggers'],
+            }.get(domain, ['Define clear scope', 'Allocate buffer resources', 'Establish escalation path', 'Set quality checkpoints'])
+
+            recs_text = "\n".join([f"1. **{doc.split('.')[0]}:** Ensure this is prioritized." for doc in relevant_facts])
+            findings_text = "\n".join([f"- {fact}" for fact in relevant_facts])
+            risks_text = "\n".join([f"- ⚠️ **{r}**: {m}" for r, m in zip(domain_risks, domain_mitigations)])
+            
+            confidence = round(0.75 + (len(relevant_facts) / max(len(rag_results), 1)) * 0.2, 2)
+            
             base_output['format'] = 'detailed'
-            base_output['output'] = {
-                'overview': f"Comprehensive analysis for {task.task_type}",
-                'details': rag_results,
-                'recommendations': [
-                    f"Action {i+1}: {doc.split('.')[0]}."
-                    for i, doc in enumerate(rag_results)
-                ],
-                'risk_assessment': {
-                    'identified_risks': [
-                        'Budget overrun',
-                        'Timeline delays',
-                        'Material price fluctuation',
-                        'Subcontractor reliability',
-                    ],
-                    'mitigation': [
-                        'Include 15% contingency budget',
-                        'Build 2-3 week buffer into schedule',
-                        'Lock in supplier prices with contracts',
-                        'Vet subcontractors with references',
-                    ],
-                },
-                'confidence_score': 0.95,
-            }
+            base_output['output'] = (
+                f"## Comprehensive {domain.title()} Analysis\n"
+                f"**Task:** {task_desc}\n"
+                f"**Confidence Score:** {int(confidence * 100)}%\n\n"
+                f"### 1. Key Findings from Knowledge Base\n{findings_text}\n\n"
+                f"### 2. Strategic Recommendations\n{recs_text}\n\n"
+                f"### 3. Risk Assessment & Mitigation\n{risks_text}\n\n"
+                f"*Report generated by {agent.name} using {len(relevant_facts)} domain references.*"
+            )
 
         return base_output
 
@@ -485,18 +523,30 @@ class PaymentService:
 
     @staticmethod
     def hold_in_escrow(user, assignment, amount):
-        """Hold funds in escrow by deducting from user's credit balance."""
+        """Hold funds in escrow, deducting a 10% platform matching fee upfront."""
+        from decimal import Decimal
+        from .models import PlatformWallet
+
         profile = user.profile
         if profile.credit_balance < amount:
             raise ValueError("Insufficient USDC credit balance.")
-        
-        profile.credit_balance -= amount
+
+        # Calculate platform fee (10% of task amount)
+        platform_fee = round(Decimal(str(amount)) * Decimal('0.10'), 5)
+        net_amount = Decimal(str(amount)) - platform_fee
+
+        # Deduct full amount from user
+        profile.credit_balance -= Decimal(str(amount))
         profile.save()
-        
+
+        # Credit platform wallet with matching fee
+        PlatformWallet.get().credit_fee(platform_fee)
+
+        # Create transaction for the net amount (what agent will receive)
         return Transaction.objects.create(
             user=user,
             assignment=assignment,
-            amount=amount,
+            amount=net_amount,
             currency='USDC',
             status='escrow',
         )
@@ -557,10 +607,17 @@ class VettingService:
         }
         
         try:
-            # For hackathon/testing: Auto-pass if the endpoint is a local/dummy url
-            if "example.com" in agent.api_endpoint or "localhost" in agent.api_endpoint or not agent.api_endpoint:
+            # Auto-approve local, internal, or dummy endpoints
+            is_local = (
+                not agent.api_endpoint
+                or "example.com" in agent.api_endpoint
+                or "127.0.0.1" in agent.api_endpoint
+                or "localhost" in agent.api_endpoint
+                or "internal-agents" in agent.api_endpoint
+            )
+            if is_local:
                 agent.vetting_test_passed = True
-                agent.vetting_test_result = {"status": "success", "message": "Auto-passed for testing"}
+                agent.vetting_test_result = {"status": "success", "message": "Internal endpoint — auto-approved"}
                 agent.status = 'active'
             else:
                 headers = {"Content-Type": "application/json"}
@@ -594,3 +651,21 @@ class VettingService:
             
         agent.save()
         return agent.vetting_test_passed
+
+    @staticmethod
+    def run_all_vetting():
+        """
+        Run automated vetting for ALL pending agents.
+        Calls vet_agent() on each one and returns the number processed.
+        Used by the Admin 'Run Automated Vetting' button.
+        """
+        pending_agents = Agent.objects.filter(status='pending')
+        processed = 0
+        for agent in pending_agents:
+            try:
+                VettingService.vet_agent(agent)
+                processed += 1
+            except Exception as e:
+                # Log but don't abort the loop
+                print(f"[VettingService] Error vetting agent {agent.name}: {e}")
+        return processed

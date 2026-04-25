@@ -157,12 +157,17 @@ class AgentDetailSerializer(serializers.ModelSerializer):
 class TaskAssignmentSerializer(serializers.ModelSerializer):
     agent = AgentSerializer(read_only=True)
     agent_id = serializers.UUIDField(write_only=True)
+    has_rating = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskAssignment
         fields = ('id', 'task', 'agent', 'agent_id', 'status', 'output_result',
-                  'assigned_at', 'completed_at')
+                  'assigned_at', 'completed_at', 'has_rating')
         read_only_fields = ('id', 'assigned_at', 'completed_at', 'output_result', 'status')
+
+    def get_has_rating(self, obj):
+        """Return True if this assignment already has a user rating."""
+        return obj.rating_set.exists() if hasattr(obj, 'rating_set') else AgentRating.objects.filter(assignment=obj).exists()
 
 
 class TaskSerializer(serializers.ModelSerializer):

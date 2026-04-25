@@ -143,8 +143,8 @@ def withdraw_funds(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def topup_funds(request):
-    """Mock top-up of USDC credits."""
-    amount = float(request.data.get('amount', 50.0))
+    from decimal import Decimal
+    amount = Decimal(str(request.data.get('amount', 50.0)))
     profile = request.user.profile
     profile.credit_balance += amount
     profile.save()
@@ -176,8 +176,8 @@ class GoalListCreateView(generics.ListCreateAPIView):
         ManagerService.decompose_goal(goal)
 
 
-class GoalDetailView(generics.RetrieveAPIView):
-    """GET — retrieve a single goal with its tasks and agent assignments."""
+class GoalDetailView(generics.RetrieveDestroyAPIView):
+    """GET/DELETE — retrieve or delete a single goal."""
     serializer_class = GoalSerializer
     permission_classes = [IsAuthenticated]
 
@@ -434,6 +434,100 @@ def mark_notification_read(request, notif_id):
         return Response({'error': 'Not found'}, status=404)
 
 # ──────────────────────────────────────────────
+# RATINGS & FEEDBACK (RAG Fine-Tuning Loop)
+# ──────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def rate_agent(request):
+    """
+    User submits a star rating and optional comment for a completed assignment.
+    - Saves the AgentRating to the database.
+    - Updates the agent's overall average rating.
+    - Injects the user feedback text into ChromaDB so it enriches future RAG queries.
+    """
+    assignment_id = request.data.get('assignment_id')
+    score = request.data.get('score')
+    comment = request.data.get('comment', '').strip()
+
+    if not assignment_id or not score:
+        return Response({'error': 'assignment_id and score are required.'}, status=400)
+
+    try:
+        score = int(score)
+        if not (1 <= score <= 5):
+            raise ValueError
+    except (ValueError, TypeError):
+        return Response({'error': 'Score must be an integer between 1 and 5.'}, status=400)
+
+    try:
+        assignment = TaskAssignment.objects.select_related('agent', 'task').get(
+            id=assignment_id, task__goal__user=request.user
+        )
+    except TaskAssignment.DoesNotExist:
+        return Response({'error': 'Assignment not found.'}, status=404)
+
+    if assignment.status == 'failed':
+        return Response({'error': 'Cannot rate a failed assignment.'}, status=400)
+
+    if assignment.status not in ('completed', 'assigned'):
+        return Response({'error': f'Assignment status is "{assignment.status}" — cannot rate yet.'}, status=400)
+
+    # Prevent duplicate ratings
+    if AgentRating.objects.filter(user=request.user, assignment=assignment).exists():
+        return Response({'error': 'You have already rated this assignment.'}, status=400)
+
+    # 1. Save rating to DB
+    AgentRating.objects.create(
+        user=request.user,
+        agent=assignment.agent,
+        assignment=assignment,
+        score=score,
+        comment=comment,
+    )
+
+    # 2. Recalculate and update agent's average rating
+    agent = assignment.agent
+    all_ratings = AgentRating.objects.filter(agent=agent)
+    avg = sum(r.score for r in all_ratings) / len(all_ratings)
+    agent.rating = round(avg, 2)
+    agent.save(update_fields=['rating'])
+
+    # 3. Inject feedback into ChromaDB for RAG fine-tuning
+    if comment:
+        try:
+            import chromadb, os, uuid as _uuid
+            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "chroma_db")
+            client = chromadb.PersistentClient(path=db_path)
+            collection = client.get_or_create_collection(name="stahk_knowledge")
+
+            domain = assignment.task.domain or "general"
+            feedback_text = (
+                f"User Feedback for agent '{agent.name}' on domain '{domain}' "
+                f"(Score: {score}/5): {comment}"
+            )
+            doc_id = f"feedback_{assignment_id}_{_uuid.uuid4().hex[:8]}"
+            collection.upsert(
+                documents=[feedback_text],
+                metadatas=[{
+                    "domain": domain,
+                    "source": "user_feedback",
+                    "agent": agent.name,
+                    "score": str(score),
+                }],
+                ids=[doc_id]
+            )
+        except Exception as rag_err:
+            # RAG injection is best-effort — don't fail the whole request
+            print(f"[RAG Feedback Injection Warning]: {rag_err}")
+
+    return Response({
+        'message': f'Thank you! Your {score}-star rating has been saved and will help improve future results.',
+        'new_agent_rating': agent.rating,
+    })
+
+
+# ──────────────────────────────────────────────
 # ADMIN SYSTEM (Section 3.9)
 # ──────────────────────────────────────────────
 
@@ -443,9 +537,10 @@ def admin_stats(request):
     if request.user.profile.role != 'admin':
         return Response({'error': 'Unauthorized'}, status=403)
     
-    from .models import Goal, Task, Agent, Transaction
+    from .models import Goal, Task, Agent, Transaction, PlatformWallet
     from django.db.models import Sum
 
+    wallet = PlatformWallet.get()
     data = {
         'total_users': User.objects.count(),
         'total_goals': Goal.objects.count(),
@@ -454,6 +549,9 @@ def admin_stats(request):
         'pending_agents': Agent.objects.filter(status='pending').count(),
         'total_escrow_volume': Transaction.objects.filter(status='escrow').aggregate(Sum('amount'))['amount__sum'] or 0,
         'total_released_volume': Transaction.objects.filter(status='released').aggregate(Sum('amount'))['amount__sum'] or 0,
+        'platform_wallet_balance': float(wallet.balance),
+        'platform_total_fees': float(wallet.total_fees_collected),
+        'platform_total_transactions': wallet.total_transactions,
     }
     return Response(data)
 
@@ -582,4 +680,60 @@ def admin_upload_knowledge(request):
         return Response({'message': f'Successfully added {file.name} to the {domain} knowledge base!'})
     except Exception as e:
         return Response({'error': f'Failed to process document: {str(e)}'}, status=500)
+
+# ──────────────────────────────────────────────
+# INTERNAL DUMMY AGENTS (For Hackathon/Testing)
+# ──────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def internal_agent_execute(request):
+    """
+    Simulates an external developer's Agent API endpoint.
+    Receives orchestration payload, analyzes the intelligence depth (retrieval_depth / tier),
+    and formats a response based on the provided RAG context.
+    """
+    data = request.data
+    task_type = data.get('task_type', 'Unknown Task')
+    domain = data.get('domain', 'general')
+    context = data.get('rag_context', [])
+    depth = data.get('retrieval_depth', 2)
+    
+    # Simulate processing time based on depth
+    import time
+    time.sleep(min(depth * 0.5, 3)) # Max 3 seconds
+
+    if depth <= 2:
+        # Basic Tier (Summary)
+        output = {
+            "status": "success",
+            "format": "summary",
+            "result": f"Basic summary for {task_type}. Analyzed {len(context)} facts.",
+            "data": " ".join(context[:2]) if context else "No context available."
+        }
+    elif 2 < depth <= 5:
+        # Standard Tier (Structured)
+        output = {
+            "status": "success",
+            "format": "structured",
+            "result": f"Standard analysis for {task_type}.",
+            "details": context[:5],
+            "action_items": [f"Implement: {fact.split('.')[0]}" for fact in context[:5]]
+        }
+    else:
+        # Premium Tier (Detailed + Risks)
+        output = {
+            "status": "success",
+            "format": "detailed",
+            "result": f"Premium deep-dive for {task_type}.",
+            "comprehensive_analysis": context,
+            "risk_factors": [
+                "Market volatility could affect pricing.",
+                "Regulatory changes in the domain may require compliance updates.",
+                "Supply chain delays for necessary materials."
+            ],
+            "strategic_recommendation": "Proceed with caution, ensuring all action items are documented."
+        }
+        
+    return Response(output)
 

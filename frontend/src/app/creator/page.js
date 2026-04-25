@@ -108,7 +108,7 @@ export default function CreatorDashboard() {
   };
 
   const handleWithdraw = async () => {
-    if (!user?.profile?.credit_balance || user.profile.credit_balance <= 0) {
+    if (!user?.credit_balance || user.credit_balance <= 0) {
       notify("No funds available to withdraw.", "error");
       return;
     }
@@ -209,9 +209,9 @@ export default function CreatorDashboard() {
           <div className="glass-card-static" style={{padding:"16px 24px",display:"flex",alignItems:"center",gap:24}}>
             <div>
               <div style={{fontSize:"0.75rem",color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em",fontWeight:700,marginBottom:4}}>Available Earnings</div>
-              <div style={{fontSize:"1.6rem",fontWeight:800,color:"var(--accent-emerald)"}}>${user?.profile?.credit_balance || "0.00"} <span style={{fontSize:"0.9rem",color:"var(--text-muted)",fontWeight:600}}>USDC</span></div>
+              <div style={{fontSize:"1.6rem",fontWeight:800,color:"var(--accent-emerald)"}}>${user?.credit_balance || "0.00"} <span style={{fontSize:"0.9rem",color:"var(--text-muted)",fontWeight:600}}>USDC</span></div>
             </div>
-            <button className="btn-emerald" onClick={handleWithdraw} style={{padding:"8px 16px",fontSize:"0.85rem"}} disabled={!user?.profile?.credit_balance || user.profile.credit_balance <= 0}>Withdraw</button>
+            <button className="btn-emerald" onClick={handleWithdraw} style={{padding:"8px 16px",fontSize:"0.85rem"}} disabled={!user?.credit_balance || user.credit_balance <= 0}>Withdraw</button>
           </div>
         </div>
 
