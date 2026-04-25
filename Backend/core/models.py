@@ -302,3 +302,36 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"To {self.user.username}: {self.title}"
+
+
+class PlatformWallet(models.Model):
+    """
+    Singleton model representing the Stahk Orchestrator's platform wallet.
+    Accumulates matching fees charged on every escrow transaction.
+    Only one record should ever exist (id=1).
+    """
+    balance = models.DecimalField(max_digits=14, decimal_places=5, default=0.00000,
+                                  help_text='Platform earnings in USDC from matching fees')
+    total_fees_collected = models.DecimalField(max_digits=14, decimal_places=5, default=0.00000)
+    total_transactions = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Platform Wallet'
+
+    @classmethod
+    def get(cls):
+        """Get or create the singleton wallet."""
+        wallet, _ = cls.objects.get_or_create(id=1)
+        return wallet
+
+    def credit_fee(self, amount):
+        """Add a fee amount to the wallet."""
+        from decimal import Decimal
+        self.balance += Decimal(str(amount))
+        self.total_fees_collected += Decimal(str(amount))
+        self.total_transactions += 1
+        self.save()
+
+    def __str__(self):
+        return f"Platform Wallet | Balance: {self.balance} USDC | Total Collected: {self.total_fees_collected} USDC"

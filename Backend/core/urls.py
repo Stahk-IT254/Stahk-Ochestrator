@@ -51,4 +51,7 @@ urlpatterns = [
     path('admin/agents/run-vetting/', views.admin_run_vetting, name='admin-run-vetting'),
     path('admin/transactions/', views.admin_transactions, name='admin-transactions'),
     path('admin/knowledge/upload/', views.admin_upload_knowledge, name='admin-upload-knowledge'),
+
+    # Internal Agent Execution (For Hackathon/Testing)
+    path('internal-agents/execute/', views.internal_agent_execute, name='internal-agent-execute'),
 ]
